@@ -4,16 +4,20 @@
   "description": "A simple, fast, robust job/task queue, backed by Redis.",
   "main": "index.js",
   "dependencies": {
-    "promise-callbacks": "^3.0.0",
-    "redis": "^2.7.1"
+    "ioredis": "^3.2.2"
   },
   "devDependencies": {
-    "ava": "^0.21.0",
+    "ava": "^0.25.0",
     "ava-spec": "^1.1.0",
     "coveralls": "^2.11.2",
-    "eslint": ">= 3",
+    "eslint": "^4.19.1",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-plugin-prettier": "^2.6.0",
+    "husky": "^0.14.3",
     "lolex": "^2.0.0",
     "nyc": "^11.0.3",
+    "prettier": "^1.12.0",
+    "promise-callbacks": "^3.0.0",
     "sandboxed-module": "^2.0.3",
     "sinon": "^2.3.8"
   },
@@ -27,12 +31,19 @@
     "lib"
   ],
   "scripts": {
+    "precommit": "npm run eslint",
     "test": "npm run eslint && ava",
     "eslint": "eslint lib/ test/",
+    "prettier": "prettier --write 'lib/**/*.js' 'test/**/*.js'",
     "coverage": "nyc ava",
     "report": "npm run coverage && nyc report --reporter=html",
     "coverage-and-publish": "npm run coverage && nyc report --reporter=text-lcov | coveralls",
     "ci": "npm run eslint && npm run coverage-and-publish"
+  },
+  "ava": {
+    "files": [
+      "test/*-test.js"
+    ]
   },
   "keywords": [
     "task",
@@ -45,7 +56,7 @@
     "lua"
   ],
   "engines": {
-    "node": ">= 4"
+    "node": ">= 8"
   },
   "author": "Lewis J Ellis <me@lewisjellis.com>",
   "license": "MIT",
