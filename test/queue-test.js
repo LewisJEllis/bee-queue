@@ -342,7 +342,7 @@ describe('Queue', (it) => {
         const jobs = spitter();
         queue.process((job) => jobs.pushSuspend(job));
 
-        await queue.createJob({}).save();
+        const job = await queue.createJob({}).save();
         const [, finishJob] = await jobs.shift();
 
         await t.throws(queue.close(10));
@@ -352,7 +352,7 @@ describe('Queue', (it) => {
 
         const errors = t.context.queueErrors, count = errors.length;
         t.context.queueErrors = errors.filter((err) => {
-          return err.message !== 'unable to update the status of succeeded job 1';
+          return err.message !== `unable to update the status of succeeded job ${job.id}`;
         });
         t.is(t.context.queueErrors.length, count - 1);
         t.context.handleErrors(t);
@@ -460,12 +460,12 @@ describe('Queue', (it) => {
       // Override _waitForJob.
       const waitJob = queue._waitForJob, wait = helpers.deferred();
       let waitDone = wait.defer();
-      queue._waitForJob = function (...args) {
+      queue._waitForJob = function () {
         if (waitDone) {
           waitDone();
           waitDone = null;
         }
-        return waitJob.apply(this, args);
+        return waitJob.apply(this);
       };
 
       await wait;
@@ -878,8 +878,21 @@ describe('Queue', (it) => {
   });
 
   it.describe('removeJob', (it) => {
-    it('should not cause an error if immediately removed', async (t) => {
+    it('should not error if active then removed before running', async (t) => {
       const queue = t.context.makeQueue();
+
+      // Inject removeJob() inside _waitForJob the first time it's called
+      const waitJob = queue._waitForJob, wait = helpers.deferred();
+      let waitDone = wait.defer();
+      queue._waitForJob = function () {
+        const args = [];
+        if (waitDone) {
+          args.push((jobId) => this.removeJob(jobId));
+          waitDone();
+          waitDone = null;
+        }
+        return waitJob.apply(this, args);
+      };
 
       queue.process(async (job) => {
         if (job.id === 'deadjob') {
@@ -887,24 +900,9 @@ describe('Queue', (it) => {
         }
       });
 
-      const waitJob = queue._waitForJob, wait = helpers.deferred();
-      let waitDone = wait.defer();
-      queue._waitForJob = function (...args) {
-        if (waitDone) {
-          waitDone();
-          waitDone = null;
-        }
-        return waitJob.apply(this, args);
-      };
-
       await wait;
-
-      const job = queue.createJob({foo: 'bar'}).setId('deadjob');
-      await Promise.all([
-        job.save(),
-        queue.removeJob(job.id),
-        queue.createJob({foo: 'bar'}).setId('goodjob').save(),
-      ]);
+      await queue.createJob({foo: 'bar'}).setId('deadjob').save();
+      await queue.createJob({foo: 'bar'}).setId('goodjob').save();
 
       const goodJob = await helpers.waitOn(queue, 'succeeded');
       t.is(goodJob.id, 'goodjob');
@@ -1163,7 +1161,7 @@ describe('Queue', (it) => {
       const [[failedJob, err]] = fail.args;
 
       t.truthy(failedJob);
-      t.is(job.id, '1');
+      t.is(job.id, failedJob.id);
       t.is(failedJob.data.foo, 'bar');
       t.is(err.message, `Job ${job.id} timed out (10 ms)`);
     });
